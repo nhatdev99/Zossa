@@ -11,7 +11,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../hooks/useAppTheme';
 import { useSalaryStore } from '../store/useSalaryStore';
-import { ShiftType, getShift, resolveShiftRates } from '../utils/salaryCalculator';
+import { SalaryCalcMode, ShiftType, WorkDayMode, getShift, resolveShiftRates } from '../utils/salaryCalculator';
 
 const MANUAL_FIELDS = ['baseHours', 'overtimeHours', 'baseRate', 'overtimeRate', 'extraHours', 'extraRate'] as const;
 const AUTO_FIELDS = ['baseSalary', 'baseHours', 'overtimeHours', 'extraHours', 'overtimeMultiplier', 'extraMultiplier'] as const;
@@ -111,8 +111,8 @@ export default function SalaryConfigScreen({ navigation }: any) {
     setFormValues((prev) => ({ ...prev, [field]: value }));
   };
 
-  const calcMode = formValues.calcMode === 'auto' ? 'auto' : 'manual';
-  const workDayMode = formValues.workDayMode === 'custom' ? 'custom' : 'month';
+  const calcMode: SalaryCalcMode = formValues.calcMode === 'auto' ? 'auto' : 'manual';
+  const workDayMode: WorkDayMode = formValues.workDayMode === 'custom' ? 'custom' : 'month';
 
   const parsed = {
     calcMode,

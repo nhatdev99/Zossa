@@ -35,6 +35,7 @@ export default function AttendanceScreen() {
 
   const [currentTime, setCurrentTime] =
     useState(new Date());
+  const todayStr = format(currentTime, 'yyyy-MM-dd');
   const [showDatePicker, setShowDatePicker] =
     useState(false);
   const [showShiftPicker, setShowShiftPicker] =
