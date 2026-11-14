@@ -1,0 +1,497 @@
+import React, { useState, useMemo } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  TouchableOpacity,
+  TextInput,
+  Alert,
+} from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { useAppTheme } from '../hooks/useAppTheme';
+import { useSalaryStore } from '../store/useSalaryStore';
+import { ShiftType, getShift, resolveShiftRates } from '../utils/salaryCalculator';
+
+const MANUAL_FIELDS = ['baseHours', 'overtimeHours', 'baseRate', 'overtimeRate', 'extraHours', 'extraRate'] as const;
+const AUTO_FIELDS = ['baseSalary', 'baseHours', 'overtimeHours', 'extraHours', 'overtimeMultiplier', 'extraMultiplier'] as const;
+
+const FIELD_LABELS: Record<string, { label: string; suffix: string }> = {
+  baseSalary: { label: 'Lương cơ bản tháng', suffix: '₫' },
+  baseHours: { label: 'Số giờ làm cơ bản', suffix: 'h' },
+  overtimeHours: { label: 'Số giờ tăng ca', suffix: 'h' },
+  extraHours: { label: 'Số giờ phụ', suffix: 'h' },
+  baseRate: { label: 'Đơn giá cơ bản', suffix: '₫/h' },
+  overtimeRate: { label: 'Đơn giá tăng ca', suffix: '₫/h' },
+  extraRate: { label: 'Đơn giá giờ phụ', suffix: '₫/h' },
+  overtimeMultiplier: { label: 'Hệ số giờ tăng ca', suffix: 'x' },
+  extraMultiplier: { label: 'Hệ số giờ phụ', suffix: 'x' },
+  customWorkDays: { label: 'Số ngày công cơ bản', suffix: 'ngày' },
+  allowance: { label: 'Phụ cấp ca', suffix: '₫/ca' },
+};
+
+function formatInitialForm(shift: any) {
+  return {
+    name: shift.name || '',
+    isOff: shift.isOff ? '1' : '0',
+    isNight: shift.isNight ? '1' : '0',
+    calcMode: shift.calcMode || 'manual',
+    baseSalary: String(shift.baseSalary ?? 0),
+    baseHours: String(shift.baseHours ?? 0),
+    overtimeHours: String(shift.overtimeHours ?? 0),
+    extraHours: String(shift.extraHours ?? 0),
+    baseRate: String(shift.baseRate ?? 0),
+    overtimeRate: String(shift.overtimeRate ?? 0),
+    extraRate: String(shift.extraRate ?? 0),
+    workDayMode: shift.workDayMode || 'month',
+    customWorkDays: String(shift.customWorkDays ?? 26),
+    overtimeMultiplier: String(shift.overtimeMultiplier ?? 1.5),
+    extraMultiplier: String(shift.extraMultiplier ?? 1),
+    allowance: String(shift.allowance ?? 0),
+  };
+}
+
+function parseLocaleNumber(value: string) {
+  if (!value) return 0;
+  const normalized = value.replace(/\s+/g, '').replace(/,/g, '.');
+  const parsed = Number(normalized);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+export default function SalaryConfigScreen({ navigation }: any) {
+  const theme = useAppTheme();
+  const styles = useMemo(() => createStyles(theme), [theme]);
+  const config = useSalaryStore((s) => s.config);
+  const updateShift = useSalaryStore((s) => s.updateShift);
+  const addShift = useSalaryStore((s) => s.addShift);
+  const deleteShift = useSalaryStore((s) => s.deleteShift);
+
+  const [activeShift, setActiveShift] = useState<ShiftType>(config.shiftOrder[0] ?? '');
+  const [formValues, setFormValues] = useState<Record<string, string>>(
+    formatInitialForm(getShift(config, config.shiftOrder[0] ?? ''))
+  );
+
+  const handleSwitchShift = (shift: ShiftType) => {
+    setActiveShift(shift);
+    setFormValues(formatInitialForm(getShift(config, shift)));
+  };
+
+  const handleAddShift = () => {
+    const id = addShift();
+    const created = useSalaryStore.getState().config.shifts[id];
+    setActiveShift(id);
+    setFormValues(formatInitialForm(created));
+  };
+
+  const handleDeleteShift = () => {
+    if (config.shiftOrder.length <= 1) {
+      Alert.alert('Không thể xoá', 'Cần giữ lại ít nhất một loại ca.');
+      return;
+    }
+    Alert.alert(
+      'Xoá loại ca',
+      `Xoá "${config.shifts[activeShift]?.name}"? Các ngày đã chấm công bằng ca này sẽ hiển thị là "Ca đã xoá" và tính 0đ.`,
+      [
+        { text: 'Huỷ', style: 'cancel' },
+        {
+          text: 'Xoá',
+          style: 'destructive',
+          onPress: () => {
+            const next = config.shiftOrder.find((id) => id !== activeShift) ?? '';
+            deleteShift(activeShift);
+            setActiveShift(next);
+            setFormValues(formatInitialForm(getShift(useSalaryStore.getState().config, next)));
+          },
+        },
+      ]
+    );
+  };
+
+  const handleChange = (field: string, value: string) => {
+    setFormValues((prev) => ({ ...prev, [field]: value }));
+  };
+
+  const calcMode = formValues.calcMode === 'auto' ? 'auto' : 'manual';
+  const workDayMode = formValues.workDayMode === 'custom' ? 'custom' : 'month';
+
+  const parsed = {
+    calcMode,
+    baseSalary: parseLocaleNumber(formValues.baseSalary),
+    baseHours: parseLocaleNumber(formValues.baseHours),
+    overtimeHours: parseLocaleNumber(formValues.overtimeHours),
+    extraHours: parseLocaleNumber(formValues.extraHours),
+    baseRate: parseLocaleNumber(formValues.baseRate),
+    overtimeRate: parseLocaleNumber(formValues.overtimeRate),
+    extraRate: parseLocaleNumber(formValues.extraRate),
+    workDayMode,
+    customWorkDays: parseLocaleNumber(formValues.customWorkDays),
+    overtimeMultiplier: parseLocaleNumber(formValues.overtimeMultiplier),
+    extraMultiplier: parseLocaleNumber(formValues.extraMultiplier),
+    allowance: parseLocaleNumber(formValues.allowance),
+  };
+
+  const previewRates = useMemo(() => resolveShiftRates(parsed as any, new Date().toISOString().slice(0, 10)), [
+    formValues,
+  ]);
+
+  const handleSave = () => {
+    if (!formValues.name?.trim()) {
+      Alert.alert('Lỗi', 'Vui lòng đặt tên cho loại ca.');
+      return;
+    }
+
+    if (parsed.baseHours <= 0) {
+      Alert.alert('Lỗi', 'Giờ cơ bản phải lớn hơn 0.');
+      return;
+    }
+
+    if (calcMode === 'manual' && parsed.baseRate <= 0) {
+      Alert.alert('Lỗi', 'Đơn giá cơ bản phải lớn hơn 0 khi dùng chế độ thủ công.');
+      return;
+    }
+
+    if (calcMode === 'auto') {
+      if (parsed.baseSalary <= 0) {
+        Alert.alert('Lỗi', 'Lương cơ bản tháng phải lớn hơn 0 khi dùng chế độ tự động.');
+        return;
+      }
+      if (workDayMode === 'custom' && parsed.customWorkDays <= 0) {
+        Alert.alert('Lỗi', 'Số ngày công cơ bản phải lớn hơn 0.');
+        return;
+      }
+    }
+
+    const shiftName = formValues.name.trim();
+    updateShift(activeShift, {
+      ...parsed,
+      name: shiftName,
+      isOff: formValues.isOff === '1',
+      isNight: formValues.isNight === '1',
+      baseRate: previewRates.baseRate,
+      overtimeRate: calcMode === 'auto' ? previewRates.overtimeRate : parsed.overtimeRate,
+      extraRate: calcMode === 'auto' ? previewRates.extraRate : parsed.extraRate,
+    });
+
+    Alert.alert('Đã lưu!', `Cập nhật hệ số lương cho "${shiftName}" thành công.`);
+  };
+
+  const renderedFields = calcMode === 'manual' ? MANUAL_FIELDS : AUTO_FIELDS;
+  const showAllowanceField = true;
+
+  const baseAmount = parseLocaleNumber(formValues.baseHours) * previewRates.baseRate;
+  const overtimeAmount = parseLocaleNumber(formValues.overtimeHours) * (calcMode === 'auto' ? previewRates.overtimeRate : parsed.overtimeRate);
+  const extraAmount = parseLocaleNumber(formValues.extraHours) * (calcMode === 'auto' ? previewRates.extraRate : parsed.extraRate);
+  const allowanceAmount = showAllowanceField ? parsed.allowance : 0;
+
+  return (
+    <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
+      <View style={styles.header}>
+        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
+          <Ionicons name="arrow-back" size={24} color={theme.colors.onSurface} />
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>Cài đặt hệ số lương</Text>
+        <View style={{ width: 40 }} />
+      </View>
+
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.tabsScroll} contentContainerStyle={styles.tabsContainer}>
+        {config.shiftOrder.map((id) => {
+          const shift = config.shifts[id];
+          if (!shift) return null;
+          const isActive = activeShift === id;
+          const color = shift.color || '#9E9E9E';
+          return (
+            <TouchableOpacity
+              key={id}
+              style={[styles.shiftTab, isActive && { backgroundColor: color, borderColor: color }]}
+              onPress={() => handleSwitchShift(id)}
+            >
+              <Ionicons name={(shift.icon || 'time') as any} size={18} color={isActive ? '#fff' : color} />
+              <Text style={[styles.shiftTabText, isActive && { color: '#fff' }]}>{shift.name}</Text>
+            </TouchableOpacity>
+          );
+        })}
+        <TouchableOpacity style={styles.shiftTab} onPress={handleAddShift}>
+          <Ionicons name="add" size={18} color={theme.colors.primary} />
+          <Text style={styles.shiftTabText}>Thêm ca</Text>
+        </TouchableOpacity>
+      </ScrollView>
+
+      <View style={styles.formContainer}>
+        <View style={styles.fieldCard}>
+          <Text style={styles.fieldLabel}>Tên loại ca</Text>
+          <View style={styles.fieldInputRow}>
+            <TextInput
+              style={styles.fieldInput}
+              value={formValues.name}
+              onChangeText={(v) => handleChange('name', v)}
+              placeholder="Ví dụ: Ca sáng, Ca đêm, Làm thêm cuối tuần"
+              placeholderTextColor={theme.colors.outline}
+            />
+          </View>
+        </View>
+
+        <View style={styles.modeRow}>
+          <TouchableOpacity
+            style={[styles.modeBtn, formValues.isOff !== '1' && styles.modeBtnActive]}
+            onPress={() => handleChange('isOff', '0')}
+          >
+            <Text style={[styles.modeText, formValues.isOff !== '1' && styles.modeTextActive]}>Ngày làm</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.modeBtn, formValues.isOff === '1' && styles.modeBtnActive]}
+            onPress={() => handleChange('isOff', '1')}
+          >
+            <Text style={[styles.modeText, formValues.isOff === '1' && styles.modeTextActive]}>Nghỉ / lễ</Text>
+          </TouchableOpacity>
+        </View>
+
+        <TouchableOpacity
+          style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 10 }}
+          onPress={() => handleChange('isNight', formValues.isNight === '1' ? '0' : '1')}
+          activeOpacity={0.8}
+        >
+          <Ionicons
+            name={formValues.isNight === '1' ? 'checkbox' : 'square-outline'}
+            size={22}
+            color={formValues.isNight === '1' ? theme.colors.primary : theme.colors.outline}
+          />
+          <Text style={{ flex: 1, color: theme.colors.onSurface }}>
+            Đây là ca làm đêm (22h–6h): phần lương cao hơn ca ngày được miễn thuế TNCN
+          </Text>
+        </TouchableOpacity>
+
+        <View style={styles.modeRow}>
+          <TouchableOpacity
+            style={[styles.modeBtn, calcMode === 'manual' && styles.modeBtnActive]}
+            onPress={() => handleChange('calcMode', 'manual')}
+          >
+            <Text style={[styles.modeText, calcMode === 'manual' && styles.modeTextActive]}>Thủ công</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.modeBtn, calcMode === 'auto' && styles.modeBtnActive]}
+            onPress={() => handleChange('calcMode', 'auto')}
+          >
+            <Text style={[styles.modeText, calcMode === 'auto' && styles.modeTextActive]}>Tự động</Text>
+          </TouchableOpacity>
+        </View>
+
+        {calcMode === 'auto' && (
+          <View style={styles.dayModeWrap}>
+            <Text style={styles.fieldLabel}>Số ngày công cơ bản</Text>
+            <View style={styles.modeRow}>
+              <TouchableOpacity
+                style={[styles.modeBtn, workDayMode === 'month' && styles.modeBtnActive]}
+                onPress={() => handleChange('workDayMode', 'month')}
+              >
+                <Text style={[styles.modeText, workDayMode === 'month' && styles.modeTextActive]}>Cả tháng</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.modeBtn, workDayMode === 'custom' && styles.modeBtnActive]}
+                onPress={() => handleChange('workDayMode', 'custom')}
+              >
+                <Text style={[styles.modeText, workDayMode === 'custom' && styles.modeTextActive]}>Tự nhập</Text>
+              </TouchableOpacity>
+            </View>
+            {workDayMode === 'custom' && (
+              <View style={styles.fieldCard}>
+                <Text style={styles.fieldLabel}>{FIELD_LABELS.customWorkDays.label}</Text>
+                <View style={styles.fieldInputRow}>
+                  <TextInput
+                    style={styles.fieldInput}
+                    keyboardType="numeric"
+                    value={formValues.customWorkDays}
+                    onChangeText={(v) => handleChange('customWorkDays', v)}
+                    placeholder="26"
+                    placeholderTextColor={theme.colors.outline}
+                  />
+                  <Text style={styles.fieldSuffix}>{FIELD_LABELS.customWorkDays.suffix}</Text>
+                </View>
+              </View>
+            )}
+          </View>
+        )}
+
+        {renderedFields.map((field) => {
+          const { label, suffix } = FIELD_LABELS[field];
+          return (
+            <View key={field} style={styles.fieldCard}>
+              <Text style={styles.fieldLabel}>{label}</Text>
+              <View style={styles.fieldInputRow}>
+                <TextInput
+                  style={styles.fieldInput}
+                  keyboardType="numeric"
+                  value={formValues[field]}
+                  onChangeText={(v) => handleChange(field, v)}
+                  placeholder="0"
+                  placeholderTextColor={theme.colors.outline}
+                />
+                <Text style={styles.fieldSuffix}>{suffix}</Text>
+              </View>
+            </View>
+          );
+        })}
+
+        {showAllowanceField && (
+          <View style={styles.fieldCard}>
+            <Text style={styles.fieldLabel}>{FIELD_LABELS.allowance.label}</Text>
+            <View style={styles.fieldInputRow}>
+              <TextInput
+                style={styles.fieldInput}
+                keyboardType="numeric"
+                value={formValues.allowance}
+                onChangeText={(v) => handleChange('allowance', v)}
+                placeholder="0"
+                placeholderTextColor={theme.colors.outline}
+              />
+              <Text style={styles.fieldSuffix}>{FIELD_LABELS.allowance.suffix}</Text>
+            </View>
+          </View>
+        )}
+
+        <View style={styles.previewCard}>
+          <Text style={styles.previewTitle}>Xem trước lương 1 ca ({calcMode === 'auto' ? 'Tự động' : 'Thủ công'})</Text>
+          <View style={styles.previewRow}>
+            <Text style={styles.previewLabel}>Lương cơ bản</Text>
+            <Text style={styles.previewValue}>{baseAmount.toLocaleString('vi-VN')} ₫</Text>
+          </View>
+          <View style={styles.previewRow}>
+            <Text style={styles.previewLabel}>Lương tăng ca</Text>
+            <Text style={styles.previewValue}>{overtimeAmount.toLocaleString('vi-VN')} ₫</Text>
+          </View>
+          <View style={styles.previewRow}>
+            <Text style={styles.previewLabel}>Lương giờ phụ</Text>
+            <Text style={styles.previewValue}>{extraAmount.toLocaleString('vi-VN')} ₫</Text>
+          </View>
+          {showAllowanceField && (
+            <View style={styles.previewRow}>
+              <Text style={styles.previewLabel}>Phụ cấp ca</Text>
+              <Text style={styles.previewValue}>{allowanceAmount.toLocaleString('vi-VN')} ₫</Text>
+            </View>
+          )}
+          <View style={styles.divider} />
+          <View style={styles.previewRow}>
+            <Text style={styles.previewLabelBold}>Tổng 1 ca</Text>
+            <Text style={styles.previewValueBold}>
+              {(baseAmount + overtimeAmount + extraAmount + allowanceAmount).toLocaleString('vi-VN')} ₫
+            </Text>
+          </View>
+          {calcMode === 'auto' && (
+            <Text style={styles.hintText}>
+              Đơn giá/giờ cơ bản tự tính = Lương cơ bản tháng / (Số ngày công cơ bản × Số giờ làm cơ bản).
+            </Text>
+          )}
+        </View>
+
+        <TouchableOpacity style={styles.saveBtn} onPress={handleSave}>
+          <Ionicons name="checkmark-circle" size={22} color={theme.colors.onPrimary} />
+          <Text style={styles.saveBtnText}>Lưu thay đổi</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={{ alignItems: 'center', paddingVertical: 14, marginTop: 8 }}
+          onPress={handleDeleteShift}
+        >
+          <Text style={{ color: theme.colors.error, fontWeight: '600' }}>Xoá loại ca này</Text>
+        </TouchableOpacity>
+      </View>
+    </ScrollView>
+  );
+}
+
+const createStyles = (theme: any) =>
+  StyleSheet.create({
+    container: { flex: 1, backgroundColor: theme.colors.surface },
+    contentContainer: { paddingBottom: 120 },
+    header: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      paddingHorizontal: 24,
+      paddingTop: 60,
+      paddingBottom: 16,
+    },
+    backBtn: {
+      width: 40,
+      height: 40,
+      borderRadius: 20,
+      backgroundColor: theme.colors.surfaceContainerHigh,
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    headerTitle: {
+      fontSize: 20,
+      fontWeight: 'bold',
+      fontFamily: theme.typography.headline,
+      color: theme.colors.onSurface,
+    },
+    tabsScroll: { maxHeight: 60, marginBottom: 24 },
+    tabsContainer: { paddingHorizontal: 24, gap: 10 },
+    shiftTab: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+      paddingHorizontal: 16,
+      paddingVertical: 10,
+      borderRadius: 12,
+      borderWidth: 1.5,
+      borderColor: 'rgba(0,0,0,0.1)',
+      backgroundColor: theme.colors.surfaceContainerLowest,
+    },
+    shiftTabText: { fontSize: 14, fontWeight: '600', color: theme.colors.onSurface },
+    formContainer: { paddingHorizontal: 24 },
+    modeRow: { flexDirection: 'row', gap: 10, marginBottom: 12 },
+    modeBtn: {
+      flex: 1,
+      borderRadius: 12,
+      height: 40,
+      justifyContent: 'center',
+      alignItems: 'center',
+      backgroundColor: theme.colors.surfaceContainerLow,
+    },
+    modeBtnActive: { backgroundColor: theme.colors.primaryContainer },
+    modeText: { fontWeight: '600', color: theme.colors.onSurfaceVariant },
+    modeTextActive: { color: theme.colors.onPrimaryContainer },
+    dayModeWrap: { marginBottom: 8 },
+    fieldCard: {
+      backgroundColor: theme.colors.surfaceContainerLowest,
+      borderRadius: 16,
+      padding: 16,
+      marginBottom: 12,
+      borderWidth: 1,
+      borderColor: 'rgba(0,0,0,0.05)',
+    },
+    fieldLabel: { fontSize: 13, fontWeight: '500', color: theme.colors.outline, marginBottom: 8 },
+    fieldInputRow: { flexDirection: 'row', alignItems: 'center' },
+    fieldInput: { flex: 1, fontSize: 22, fontWeight: '700', color: theme.colors.onSurface, padding: 0 },
+    fieldSuffix: { fontSize: 14, fontWeight: '600', color: theme.colors.outline, marginLeft: 8 },
+    previewCard: {
+      backgroundColor: theme.colors.primaryContainer,
+      borderRadius: 20,
+      padding: 20,
+      marginTop: 12,
+      marginBottom: 24,
+    },
+    previewTitle: { fontSize: 14, fontWeight: 'bold', color: theme.colors.onPrimaryContainer, marginBottom: 16 },
+    previewRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 },
+    previewLabel: { fontSize: 14, color: theme.colors.onPrimaryContainer, opacity: 0.7 },
+    previewValue: { fontSize: 14, fontWeight: '600', color: theme.colors.onPrimaryContainer },
+    previewLabelBold: { fontSize: 16, fontWeight: 'bold', color: theme.colors.onPrimaryContainer },
+    previewValueBold: { fontSize: 16, fontWeight: 'bold', color: theme.colors.onPrimaryContainer },
+    hintText: { marginTop: 8, fontSize: 12, color: theme.colors.onPrimaryContainer, opacity: 0.75 },
+    divider: { height: 1, backgroundColor: 'rgba(0,0,0,0.1)', marginVertical: 8 },
+    saveBtn: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 8,
+      backgroundColor: theme.colors.primary,
+      padding: 16,
+      borderRadius: 16,
+      elevation: 4,
+      shadowColor: theme.colors.primary,
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.3,
+      shadowRadius: 8,
+    },
+    saveBtnText: { fontSize: 16, fontWeight: 'bold', color: theme.colors.onPrimary },
+  });
