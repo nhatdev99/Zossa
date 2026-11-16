@@ -25,7 +25,13 @@ import {
 } from 'date-fns';
 import { vi } from 'date-fns/locale';
 import { useSalaryStore } from '../store/useSalaryStore';
-import { ShiftType, getShiftName, getShiftColor } from '../utils/salaryCalculator';
+import {
+  ShiftType,
+  getShift,
+  getShiftName,
+  getShiftColor,
+  buildShiftTimestamps,
+} from '../utils/salaryCalculator';
 import { useThemeStore } from '../store/useThemeStore';
 
 export default function LogsScreen() {
@@ -111,16 +117,21 @@ export default function LogsScreen() {
   const handleShiftSelect = (shift: ShiftType) => {
     if (!selectedDate) return;
 
-    const isToday = selectedDate === format(today, 'yyyy-MM-dd');
-    checkIn(selectedDate, shift, {
-      autoComplete: !isToday,
-    });
+    const shiftConfig = getShift(config, shift);
+    if (!buildShiftTimestamps(selectedDate, shiftConfig)) {
+      setShowShiftPicker(false);
+      Alert.alert(
+        'Chưa cài giờ ca',
+        'Hãy cài giờ vào và giờ ra trong phần Cài đặt hệ số lương trước khi chấm công nhanh.'
+      );
+      return;
+    }
+
+    checkIn(selectedDate, shift, { autoComplete: true });
     setShowShiftPicker(false);
     Alert.alert(
-      isToday ? 'Check In thanh cong' : 'Da luu cong cho ngay truoc',
-      isToday
-        ? `Da ghi nhan ca "${getShiftName(config, shift)}" cho ngay ${selectedDate}.`
-        : `Da ghi nhan ca "${getShiftName(config, shift)}" cho ngay ${selectedDate}.`
+      'Đã ghi nhận ca',
+      `Đã chấm công ca "${getShiftName(config, shift)}" theo giờ vào/ra đã cài đặt cho ngày ${selectedDate}.`
     );
   };
 
