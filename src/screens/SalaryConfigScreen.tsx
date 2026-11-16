@@ -11,7 +11,15 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../hooks/useAppTheme';
 import { useSalaryStore } from '../store/useSalaryStore';
-import { SalaryCalcMode, ShiftType, WorkDayMode, getShift, resolveShiftRates } from '../utils/salaryCalculator';
+import {
+  SalaryCalcMode,
+  ShiftType,
+  WorkDayMode,
+  getShift,
+  resolveShiftRates,
+  splitScheduledHours,
+} from '../utils/salaryCalculator';
+import ShiftTimeEditor from '../components/ShiftTimeEditor';
 
 const MANUAL_FIELDS = ['baseHours', 'overtimeHours', 'baseRate', 'overtimeRate', 'extraHours', 'extraRate'] as const;
 const AUTO_FIELDS = ['baseSalary', 'baseHours', 'overtimeHours', 'extraHours', 'overtimeMultiplier', 'extraMultiplier'] as const;
@@ -67,6 +75,7 @@ export default function SalaryConfigScreen({ navigation }: any) {
   const deleteShift = useSalaryStore((s) => s.deleteShift);
 
   const [activeShift, setActiveShift] = useState<ShiftType>(config.shiftOrder[0] ?? '');
+  const [timeEditorOpen, setTimeEditorOpen] = useState(false);
   const [formValues, setFormValues] = useState<Record<string, string>>(
     formatInitialForm(getShift(config, config.shiftOrder[0] ?? ''))
   );
@@ -110,6 +119,11 @@ export default function SalaryConfigScreen({ navigation }: any) {
   const handleChange = (field: string, value: string) => {
     setFormValues((prev) => ({ ...prev, [field]: value }));
   };
+
+  const currentShift = getShift(config, activeShift);
+  const schedule = splitScheduledHours(currentShift);
+  const scheduleOvernight =
+    !!currentShift.startTime && !!currentShift.endTime && currentShift.endTime <= currentShift.startTime;
 
   const calcMode: SalaryCalcMode = formValues.calcMode === 'auto' ? 'auto' : 'manual';
   const workDayMode: WorkDayMode = formValues.workDayMode === 'custom' ? 'custom' : 'month';
@@ -260,6 +274,44 @@ export default function SalaryConfigScreen({ navigation }: any) {
           </Text>
         </TouchableOpacity>
 
+        <View style={styles.fieldCard}>
+          <Text style={styles.fieldLabel}>Giờ vào ca và giờ tan ca</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 4 }}>
+            <View style={{ flex: 1 }}>
+              {schedule ? (
+                <>
+                  <Text style={{ fontSize: 20, fontWeight: '800', color: theme.colors.onSurface }}>
+                    {currentShift.startTime} → {currentShift.endTime}
+                    {scheduleOvernight ? ' (hôm sau)' : ''}
+                  </Text>
+                  <Text style={{ fontSize: 12, color: theme.colors.onSurfaceVariant, marginTop: 2 }}>
+                    {schedule.total} giờ: cơ bản {schedule.actualHours}
+                    {schedule.overtimeHours > 0 ? ` + tăng ca ${schedule.overtimeHours}` : ''}
+                    {currentShift.breakMinutes ? ` · nghỉ ${currentShift.breakMinutes} phút` : ''}
+                  </Text>
+                </>
+              ) : (
+                <Text style={{ fontSize: 14, color: theme.colors.onSurfaceVariant }}>
+                  Chưa cài giờ. Cài để ghi nhanh một ngày theo đúng giờ vào ca và tan ca.
+                </Text>
+              )}
+            </View>
+            <TouchableOpacity
+              style={{
+                paddingHorizontal: 14,
+                paddingVertical: 10,
+                borderRadius: 12,
+                backgroundColor: theme.colors.primaryContainer,
+              }}
+              onPress={() => setTimeEditorOpen(true)}
+            >
+              <Text style={{ fontWeight: '700', color: theme.colors.onPrimaryContainer }}>
+                {schedule ? 'Sửa giờ' : 'Cài giờ'}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+
         <View style={styles.modeRow}>
           <TouchableOpacity
             style={[styles.modeBtn, calcMode === 'manual' && styles.modeBtnActive]}
@@ -394,6 +446,12 @@ export default function SalaryConfigScreen({ navigation }: any) {
           <Text style={{ color: theme.colors.error, fontWeight: '600' }}>Xoá loại ca này</Text>
         </TouchableOpacity>
       </View>
+
+      <ShiftTimeEditor
+        visible={timeEditorOpen}
+        shiftId={activeShift}
+        onClose={() => setTimeEditorOpen(false)}
+      />
     </ScrollView>
   );
 }

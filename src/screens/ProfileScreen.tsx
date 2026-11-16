@@ -99,6 +99,14 @@ export default function ProfileScreen() {
             />
             <View style={styles.divider} />
             <MenuItem
+              icon="business-outline"
+              title="Công thức lương công ty"
+              theme={theme}
+              styles={styles}
+              onPress={() => navigation.navigate('CompanyPreset')}
+            />
+            <View style={styles.divider} />
+            <MenuItem
               icon="receipt-outline"
               title="Thue va bao hiem"
               theme={theme}

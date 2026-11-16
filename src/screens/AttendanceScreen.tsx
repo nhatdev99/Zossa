@@ -507,7 +507,7 @@ export default function AttendanceScreen() {
                     >
                       <Text style={styles.shiftLabel}>{getShiftName(config, shift)}</Text>
                       <Text style={{ fontSize: 12, color: theme.colors.onSurfaceVariant, marginTop: 2 }}>
-                        {hasTime ? `${sc.startTime} – ${sc.endTime}` : 'Chưa cài giờ vào ra'}
+                        {hasTime ? `${sc.startTime} – ${sc.endTime}` : 'Chưa cài giờ vào ca và tan ca'}
                       </Text>
                     </TouchableOpacity>
                     {isToday && hasTime && (

@@ -18,6 +18,7 @@ import StatisticsCompareScreen from '../screens/StatisticsCompareScreen';
 import PersonalInfoScreen from '../screens/PersonalInfoScreen';
 import TaxSettingsScreen from '../screens/TaxSettingsScreen';
 import ExportScreen from '../screens/ExportScreen';
+import CompanyPresetScreen from '../screens/CompanyPresetScreen';
 import { applyReminders } from '../services/reminders';
 import { useReminderStore } from '../store/useReminderStore';
 import SetupScreen from '../screens/SetupScreen';
@@ -110,6 +111,11 @@ const ProfileStackScreen = () => {
         name="TaxSettings"
         component={TaxSettingsScreen}
         options={{ headerShown: true, title: 'Thuế và bảo hiểm' }}
+      />
+      <ProfileStack.Screen
+        name="CompanyPreset"
+        component={CompanyPresetScreen}
+        options={{ headerShown: true, title: 'Công thức lương công ty' }}
       />
       <ProfileStack.Screen
         name="Export"

@@ -15,6 +15,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../hooks/useAppTheme';
 import { useProfileStore } from '../store/useProfileStore';
 import { useSalaryStore } from '../store/useSalaryStore';
+import { NIDEC_PRESET } from '../utils/companyPresets';
 import {
   DEFAULT_TAX_SETTINGS,
   Region,
@@ -25,10 +26,11 @@ import {
   formatTime,
 } from '../utils/salaryCalculator';
 
-type PresetId = 'office' | 'hourly' | 'dayNight' | 'custom';
+type PresetId = 'nidec' | 'office' | 'hourly' | 'dayNight' | 'custom';
 type PayMode = 'hourly' | 'monthly';
 
 const PRESETS: { id: PresetId; title: string; desc: string; icon: string; hours: string }[] = [
+  { id: 'nidec', title: 'Nidec Việt Nam', desc: 'Công thức lương có sẵn', icon: 'business-outline', hours: '9.5' },
   { id: 'office', title: 'Hành chính', desc: 'Một ca cố định mỗi ngày', icon: 'briefcase-outline', hours: '8' },
   { id: 'dayNight', title: 'Ca ngày / đêm', desc: 'Hai ca, ca đêm cao hơn', icon: 'moon-outline', hours: '8' },
   { id: 'hourly', title: 'Làm theo giờ', desc: 'Part-time, làm thêm', icon: 'time-outline', hours: '4' },
@@ -65,15 +67,23 @@ export default function SetupScreen() {
   const [otMultiplier, setOtMultiplier] = useState('1.5');
   const [addHoliday, setAddHoliday] = useState(true);
   const [taxRate, setTaxRate] = useState('0');
+  const [workDays, setWorkDays] = useState('22');
   const [taxMode, setTaxMode] = useState<TaxMode>('progressive');
   const [dependents, setDependents] = useState(0);
   const [insuranceSalary, setInsuranceSalary] = useState('');
   const [region, setRegion] = useState<Region>(1);
 
-  const hours = parseNumber(baseHours);
+  const isNidec = preset === 'nidec';
+  const hours = isNidec ? 9.5 : parseNumber(baseHours);
   const money = parseNumber(amount);
-  const hourlyRate =
-    payMode === 'hourly' ? money : hours > 0 ? money / (26 * hours) : 0;
+  const workDaysNum = parseNumber(workDays);
+  const hourlyRate = isNidec
+    ? NIDEC_PRESET.preview({ baseSalary: money, workDays: workDaysNum }).hourly
+    : payMode === 'hourly'
+    ? money
+    : hours > 0
+    ? money / (26 * hours)
+    : 0;
 
   const choosePreset = (id: PresetId) => {
     setPreset(id);
@@ -85,7 +95,12 @@ export default function SetupScreen() {
       Alert.alert('Thông báo', 'Vui lòng nhập tên của bạn.');
       return;
     }
-    if (step === 2) {
+    if (step === 2 && isNidec) {
+      if (money <= 0 || workDaysNum <= 0) {
+        Alert.alert('Thông báo', 'Vui lòng nhập lương cơ bản và số ngày công.');
+        return;
+      }
+    } else if (step === 2) {
       if (hours <= 0) {
         Alert.alert('Thông báo', 'Số giờ làm mỗi ca phải lớn hơn 0.');
         return;
@@ -146,7 +161,10 @@ export default function SetupScreen() {
       order.push(id);
     };
 
-    if (preset === 'dayNight') {
+    if (preset === 'nidec') {
+      const built = NIDEC_PRESET.build({ baseSalary: money, workDays: workDaysNum });
+      built.shiftOrder.forEach((id) => add(id, built.shifts[id]));
+    } else if (preset === 'dayNight') {
       // Luật lao động VN: làm đêm được trả ít nhất +30% so với ban ngày
       add('day', buildShift('Ca ngày', 0, 1, false, 'sunny', false, 7));
       add('night', buildShift('Ca đêm', 1, 1.3, false, 'moon', true, 22));
@@ -158,13 +176,16 @@ export default function SetupScreen() {
       add('regular', buildShift('Ca làm việc', 0, 1, false, 'time'));
     }
 
-    if (addHoliday) {
+    if (addHoliday && preset !== 'nidec') {
       add('holiday', buildShift('Ngày nghỉ / lễ', 2, 2, true, 'sunny-outline'));
     }
 
     const config: Partial<SalaryConfig> = {
       shifts,
       shiftOrder: order,
+      company: isNidec
+        ? { id: 'nidec', baseSalary: money, workDays: workDaysNum, includeOffDays: true }
+        : undefined,
       taxRate: taxMode === 'flat' ? Math.min(Math.max(parseNumber(taxRate), 0), 100) : 0,
       tax: {
         ...DEFAULT_TAX_SETTINGS,
@@ -267,6 +288,24 @@ export default function SetupScreen() {
               })}
             </View>
 
+            {isNidec ? (
+            <>
+              {renderField('Lương cơ bản mỗi tháng', amount, setAmount, { suffix: '₫', numeric: true, placeholder: 'Ví dụ: 10450000' })}
+              {renderField('Số ngày công chuẩn', workDays, setWorkDays, { suffix: 'ngày', numeric: true })}
+              <View style={styles.summaryCard}>
+                <Text style={styles.summaryTitle}>Công thức Nidec Việt Nam</Text>
+                {NIDEC_PRESET.formula.map((line) => (
+                  <Text key={line} style={styles.hint}>• {line}</Text>
+                ))}
+                <SummaryRow label="Giờ cơ bản" value={`${formatMoney(hourlyRate)} ₫`} />
+                <SummaryRow label="Giờ tăng ca ngày (x1,5)" value={`${formatMoney(hourlyRate * 1.5)} ₫`} />
+                <SummaryRow label="Giờ tăng ca đêm (x2,1)" value={`${formatMoney(hourlyRate * 2.1)} ₫`} />
+                <SummaryRow label="Ngày nghỉ, ca ngày (x2 tăng ca)" value={`${formatMoney(hourlyRate * 1.5 * 2)} ₫`} />
+                <SummaryRow label="Ngày nghỉ, ca đêm (x2 tăng ca)" value={`${formatMoney(hourlyRate * 2.1 * 2)} ₫`} />
+              </View>
+            </>
+            ) : (
+              <>
             <View style={styles.segment}>
               {(['hourly', 'monthly'] as PayMode[]).map((m) => (
                 <TouchableOpacity
@@ -304,6 +343,8 @@ export default function SetupScreen() {
               />
               <Text style={styles.toggleText}>Thêm ca "Ngày nghỉ / lễ" với đơn giá gấp đôi</Text>
             </TouchableOpacity>
+              </>
+            )}
           </View>
         )}
 

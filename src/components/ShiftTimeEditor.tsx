@@ -105,13 +105,13 @@ export default function ShiftTimeEditor({ visible, shiftId, onClose }: Props) {
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <View style={styles.overlay}>
         <View style={styles.card}>
-          <Text style={styles.title}>Giờ vào ra · {getShiftName(config, shiftId)}</Text>
+          <Text style={styles.title}>Giờ vào ca và tan ca · {getShiftName(config, shiftId)}</Text>
           <Text style={styles.subtitle}>
-            Dùng khi bạn ghi nhanh một ngày. Giờ ra nhỏ hơn giờ vào nghĩa là ca qua nửa đêm.
+            Dùng khi bạn ghi nhanh một ngày. Giờ tan ca nhỏ hơn giờ vào ca nghĩa là ca qua nửa đêm.
           </Text>
 
           <Field label="Giờ vào ca" minutes={start} onChange={setStart} />
-          <Field label="Giờ ra ca" minutes={end} onChange={setEnd} />
+          <Field label="Giờ tan ca" minutes={end} onChange={setEnd} />
 
           <View style={styles.field}>
             <Text style={styles.fieldLabel}>Nghỉ giữa ca (phút)</Text>
@@ -139,7 +139,7 @@ export default function ShiftTimeEditor({ visible, shiftId, onClose }: Props) {
                 </Text>
               </>
             ) : (
-              <Text style={styles.previewSub}>Giờ vào và giờ ra đang trùng nhau, hãy chọn lại.</Text>
+              <Text style={styles.previewSub}>Giờ vào ca và giờ tan ca đang trùng nhau, hãy chọn lại.</Text>
             )}
           </View>
 

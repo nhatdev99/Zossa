@@ -60,6 +60,13 @@ export interface SalaryConfig {
   shiftOrder: string[]; // Thứ tự hiển thị của các ca
   taxRate: number; // Phần trăm khấu trừ cố định (dùng khi tax.mode = 'flat')
   tax?: TaxSettings; // Thuế TNCN + bảo hiểm; không có = cách tính cũ (chỉ taxRate)
+  company?: {
+    id: string;
+    baseSalary: number;
+    workDays: number;
+    offMultiplier?: number;
+    includeOffDays?: boolean;
+  }; // Công thức lương công ty đang áp dụng
 }
 
 /** Lấy cài đặt thuế đầy đủ, tương thích dữ liệu cũ chỉ có taxRate. */
