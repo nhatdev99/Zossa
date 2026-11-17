@@ -1,13 +1,16 @@
 import React, { useMemo, useState } from 'react';
 import { Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { format } from 'date-fns';
+import { format as formatDate } from 'date-fns';
 import { useAppTheme } from '../hooks/useAppTheme';
 import { useSalaryStore } from '../store/useSalaryStore';
 import { CsvSeparator, buildMonthCsv, buildYearCsv } from '../utils/csv';
-import { shareCsv } from '../services/csvExport';
+import { buildMonthXlsx, buildYearXlsx } from '../utils/xlsxReports';
+import { shareCsv, shareXlsx } from '../services/csvExport';
+import { BRAND } from '../config/brand';
 
 type Scope = 'month' | 'year';
+type Format = 'xlsx' | 'csv';
 
 export default function ExportScreen() {
   const theme = useAppTheme();
@@ -15,7 +18,7 @@ export default function ExportScreen() {
   const records = useSalaryStore((s) => s.attendance);
   const config = useSalaryStore((s) => s.config);
 
-  const nowMonth = format(new Date(), 'yyyy-MM');
+  const nowMonth = formatDate(new Date(), 'yyyy-MM');
 
   const monthList = useMemo(() => {
     const set = new Set<string>([nowMonth]);
@@ -28,6 +31,7 @@ export default function ExportScreen() {
   const [month, setMonth] = useState(nowMonth);
   const [year, setYear] = useState(nowMonth.slice(0, 4));
   const [sep, setSep] = useState<CsvSeparator>(';');
+  const [format, setFormat] = useState<Format>('xlsx');
   const [busy, setBusy] = useState(false);
 
   const countRecords =
@@ -42,10 +46,17 @@ export default function ExportScreen() {
     }
     setBusy(true);
     try {
-      if (scope === 'month') {
-        await shareCsv(`Rosala_${month}.csv`, buildMonthCsv(records, config, month, sep));
+      const stem = scope === 'month' ? month : year;
+      if (format === 'xlsx') {
+        const bytes =
+          scope === 'month'
+            ? buildMonthXlsx(records, config, month)
+            : buildYearXlsx(records, config, year);
+        await shareXlsx(`${BRAND}_${stem}.xlsx`, bytes);
+      } else if (scope === 'month') {
+        await shareCsv(`${BRAND}_${month}.csv`, buildMonthCsv(records, config, month, sep));
       } else {
-        await shareCsv(`Rosala_${year}.csv`, buildYearCsv(records, config, year, sep));
+        await shareCsv(`${BRAND}_${year}.csv`, buildYearCsv(records, config, year, sep));
       }
     } catch (e: any) {
       Alert.alert('Không thể xuất file', e?.message || 'Vui lòng thử lại.');
@@ -62,8 +73,19 @@ export default function ExportScreen() {
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      <Text style={styles.title}>Xuất dữ liệu CSV</Text>
-      <Text style={styles.subtitle}>Mở bằng Excel, Numbers hoặc Google Sheets. File chỉ nằm trên máy cho đến khi bạn chọn nơi lưu hoặc gửi.</Text>
+      <Text style={styles.title}>Xuất dữ liệu</Text>
+      <Text style={styles.subtitle}>Chọn Excel để có bảng đẹp, hoặc CSV nếu cần dữ liệu thô. File chỉ nằm trên máy cho đến khi bạn chọn nơi lưu hoặc gửi.</Text>
+
+      <Text style={styles.section}>Định dạng file</Text>
+      <View style={{ flexDirection: 'row', gap: 8 }}>
+        <Chip label="Excel (.xlsx)" on={format === 'xlsx'} onPress={() => setFormat('xlsx')} />
+        <Chip label="CSV thô" on={format === 'csv'} onPress={() => setFormat('csv')} />
+      </View>
+      <Text style={styles.hint}>
+        {format === 'xlsx'
+          ? 'Bảng có màu, căn lề, định dạng số, dòng tổng và trang tổng kết, mở được bằng Excel, Numbers, Google Sheets. Nên dùng để xem và in.'
+          : 'Văn bản thuần, không màu và không căn lề. Chỉ nên dùng để đưa dữ liệu vào phần mềm khác.'}
+      </Text>
 
       <Text style={styles.section}>Bạn muốn xuất</Text>
       <View style={styles.scopeRow}>
@@ -89,25 +111,29 @@ export default function ExportScreen() {
           : yearList.map((y) => <Chip key={y} label={`Năm ${y}`} on={year === y} onPress={() => setYear(y)} />)}
       </ScrollView>
 
-      <Text style={styles.section}>Dấu phân cách cột</Text>
-      <View style={{ flexDirection: 'row', gap: 8 }}>
-        <Chip label="Chấm phẩy ( ; )" on={sep === ';'} onPress={() => setSep(';')} />
-        <Chip label="Dấu phẩy ( , )" on={sep === ','} onPress={() => setSep(',')} />
-      </View>
-      <Text style={styles.hint}>
-        Excel tiếng Việt thường cần chấm phẩy. Nếu mở file thấy mọi thứ dồn vào một cột, hãy xuất lại với lựa chọn còn lại.
-      </Text>
+      {format === 'csv' && (
+        <>
+          <Text style={styles.section}>Dấu phân cách cột</Text>
+          <View style={{ flexDirection: 'row', gap: 8 }}>
+            <Chip label="Chấm phẩy ( ; )" on={sep === ';'} onPress={() => setSep(';')} />
+            <Chip label="Dấu phẩy ( , )" on={sep === ','} onPress={() => setSep(',')} />
+          </View>
+          <Text style={styles.hint}>
+            Excel tiếng Việt thường cần chấm phẩy. Nếu mở file thấy mọi thứ dồn vào một cột, hãy xuất lại với lựa chọn còn lại.
+          </Text>
+        </>
+      )}
 
       <View style={styles.preview}>
         <Ionicons name="document-text-outline" size={20} color={theme.colors.primary} />
         <Text style={styles.previewText}>
-          {scope === 'month' ? `Rosala_${month}.csv` : `Rosala_${year}.csv`} · {countRecords} ngày chấm công
+          {`${BRAND}_${scope === 'month' ? month : year}.${format}`} · {countRecords} ngày chấm công
         </Text>
       </View>
 
       <TouchableOpacity style={[styles.btn, busy && { opacity: 0.6 }]} onPress={handleExport} disabled={busy} activeOpacity={0.9}>
         <Ionicons name="share-outline" size={20} color={theme.colors.onPrimary} />
-        <Text style={styles.btnText}>{busy ? 'Đang tạo file...' : 'Xuất CSV'}</Text>
+        <Text style={styles.btnText}>{busy ? 'Đang tạo file...' : format === 'xlsx' ? 'Xuất Excel' : 'Xuất CSV'}</Text>
       </TouchableOpacity>
     </ScrollView>
   );

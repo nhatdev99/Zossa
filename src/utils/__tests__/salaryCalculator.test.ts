@@ -267,4 +267,12 @@ describe('salaryCalculator', () => {
     expect(t.checkOut.getHours()).toBe(6);
     expect(buildShiftTimestamps('2026-11-30', shiftWith())).toBe(null);
   });
+
+  test('Tháng không có ngày chấm công: không trừ bảo hiểm hay thuế, thực nhận 0', () => {
+    const cfg = oneHourConfig(30_000_000, { ...progressive, insuranceBasis: 'fixed', insuranceSalary: 5_000_000 });
+    const r = calculateMonthlySalary([], cfg, '2026-03');
+    expect(r.insuranceAmount).toBe(0);
+    expect(r.taxAmount).toBe(0);
+    expect(r.netSalary).toBe(0);
+  });
 });

@@ -518,7 +518,8 @@ export const calculateMonthlySalary = (
   let bhxh = 0;
   let bhyt = 0;
   let bhtn = 0;
-  if (tax.insuranceEnabled) {
+  // Tháng chưa có ngày chấm công nào thì không có khoản khấu trừ nào
+  if (tax.insuranceEnabled && monthlyRecords.length > 0) {
     const insuredSalary = tax.insuranceBasis === 'gross' ? totalSalary : tax.insuranceSalary;
     const bhxhBase = Math.min(Math.max(insuredSalary, 0), legal.bhxhCap);
     const bhtnBase = Math.min(Math.max(insuredSalary, 0), legal.bhtnCap);

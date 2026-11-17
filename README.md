@@ -34,7 +34,7 @@ Offline time tracking and salary calculator for shift workers. Track your shifts
 - **Salary overview** for any month: gross, social insurance, PIT, net pay and a full breakdown.
 - **Vietnamese PIT and social insurance** (BHXH, BHYT, BHTN), including dependants and the exemption of the night and overtime premium. Alternatively use a flat percentage or no deduction.
 - **Statistics**: compare all months of a year (net, gross, hours, overtime), gross versus net, and month versus previous month.
-- **CSV export** per month (daily detail plus summary) or per year (one row per month). Choose `;` or `,` as separator for Excel compatibility.
+- **Excel and CSV export** per month or year. Excel files include formatted attendance details and salary summaries; CSV remains available as plain, interoperable data with a selectable `;` or `,` separator.
 - **Reminders**: local notifications for check in, check out and monthly payroll review.
 - **Backup and restore** as plain JSON text, without any cloud service.
 - **Themes**: light, dark or system, plus several colour palettes.
@@ -65,7 +65,7 @@ Rosala is designed according to *data protection by design and by default* (Arti
 
 Because all data lives on your device and under your control:
 
-- **Access and portability (Art. 15, 20)**: export your data at any time as CSV (readable in Excel, Numbers, Google Sheets) or as a JSON backup.
+- **Access and portability (Art. 15, 20)**: export your data at any time as Excel (`.xlsx`), CSV, or a JSON backup.
 - **Rectification (Art. 16)**: edit any record, setting or profile field inside the app.
 - **Erasure (Art. 17)**: use *Backup and restore → Delete all data* to wipe attendance, pay settings and profile. Uninstalling the app removes all remaining local data. Reminder notifications are device schedules: switch them off in *Reminders* or uninstall the app.
 - **Data you share yourself**: files you export (CSV, JSON) leave the app only when you choose where to save or send them. From that moment their protection is your responsibility and the responsibility of the app you share them with.
@@ -79,7 +79,7 @@ The developer does not receive or determine the purposes of processing of your p
 ## Security
 
 - Data is stored in the platform sandbox of the app. Rosala does not implement its own encryption at rest; it relies on the operating system's device encryption and lock screen. Enable a device passcode.
-- Exported CSV and JSON files are **not encrypted**. Store and share them accordingly.
+- Exported Excel, CSV and JSON files are **not encrypted**. Store and share them accordingly.
 - The app opens no network connections, which removes the whole class of data-in-transit risks.
 
 ### Reporting a vulnerability
@@ -129,7 +129,7 @@ The rules live in `src/utils/salaryCalculator.ts` and are covered by unit tests 
 - TypeScript
 - React Navigation (bottom tabs and native stack)
 - Zustand with AsyncStorage persistence
-- `expo-notifications` (local notifications), `expo-file-system` and `expo-sharing` (CSV export), `expo-image-picker` (avatar)
+- `expo-notifications` (local notifications), `expo-file-system` and `expo-sharing` (Excel and CSV export), `expo-image-picker` (avatar)
 - `date-fns`
 - Jest and ts-jest for the calculation logic
 
@@ -178,10 +178,12 @@ src/
 
 **Backup (JSON text).** An object with `app: "rosala"`, a `format` number, `exportedAt` and a `data` map containing the persisted stores. Restoring replaces the current data on the device.
 
+**Excel (`.xlsx`).** Formatted monthly reports contain an attendance detail sheet and a salary summary sheet. Annual reports contain all 12 months and an annual total.
+
 **CSV.** UTF-8 with byte order mark, so Excel reads Vietnamese characters correctly. With `;` as separator the decimal mark is `,`; with `,` as separator it is `.`.
 
-- Month file: `Rosala_YYYY-MM.csv` with one row per day, followed by a summary block.
-- Year file: `Rosala_YYYY.csv` with one row per month and a total row.
+- Month file: `Zossa_YYYY-MM.xlsx` or `Zossa_YYYY-MM.csv`.
+- Year file: `Zossa_YYYY.xlsx` or `Zossa_YYYY.csv`.
 
 ## Contributing
 
