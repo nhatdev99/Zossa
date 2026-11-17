@@ -4,7 +4,6 @@ export interface CompanyInput {
   baseSalary: number; // Lương cơ bản tháng (người dùng tự nhập)
   workDays: number; // Số ngày công chuẩn trong tháng
   includeOffDays?: boolean; // Có áp dụng công thức ngày nghỉ (mặc định có)
-  offMultiplier?: number; // Hệ số ngày nghỉ so với đơn giá tăng ca (mặc định 2)
 }
 
 export interface CompanyPreview {
@@ -21,7 +20,6 @@ export interface CompanyPreset {
   name: string;
   description: string;
   defaultWorkDays: number;
-  defaultOffMultiplier: number;
   /** Công thức lương ca ngày / ca đêm */
   formula: string[];
   /** Công thức ngày nghỉ, tách riêng khỏi công thức lương */
@@ -40,9 +38,8 @@ export interface CompanyPreset {
 //            / 9,5 giờ = đơn giá giờ cơ bản; x 1,5 = đơn giá giờ tăng ca
 //   Ca đêm : đơn giá giờ cơ bản như ca ngày; x 2,1 = đơn giá giờ tăng ca
 //  Công thức ngày nghỉ (tách riêng)
-//   Nghỉ (ca ngày) = đơn giá giờ tăng ca ca ngày x 2
-//   Nghỉ (ca đêm) = đơn giá giờ tăng ca ca đêm x 2
-//   Mọi giờ làm trong ngày nghỉ (cả giờ cơ bản và giờ tăng ca) tính cùng đơn giá này.
+//   Nghỉ (ca ngày/đêm) = đơn giá giờ cơ bản tương ứng x 2
+//   Mọi giờ làm trong ngày nghỉ tính cùng đơn giá, không áp dụng hệ số tăng ca.
 // ---------------------------------------------------------------------------
 const NIDEC_BASE_HOURS = 9.5;
 const NIDEC_DAY_OT = 1.5;
@@ -53,9 +50,6 @@ const round4 = (v: number) => Math.round(v * 10000) / 10000;
 
 const hourlyOf = (input: CompanyInput) =>
   input.workDays > 0 ? input.baseSalary / (input.workDays * NIDEC_BASE_HOURS) : 0;
-
-const offMultiplierOf = (input: CompanyInput) =>
-  input.offMultiplier && input.offMultiplier > 0 ? input.offMultiplier : NIDEC_OFF_MULTIPLIER;
 
 const buildNidecShift = (
   id: 'day' | 'night',
@@ -97,16 +91,17 @@ const buildNidecShift = (
 };
 
 /**
- * Ca ngày nghỉ: mọi giờ làm tính theo (đơn giá giờ tăng ca của ca tương ứng x hệ số ngày nghỉ).
+ * Ca ngày nghỉ: mọi giờ làm tính theo (đơn giá giờ cơ bản của ca tương ứng x 2).
  * Lưu ở chế độ thủ công với đơn giá đã tính sẵn; áp dụng lại công thức để cập nhật khi đổi lương.
  */
 const buildNidecOffShift = (
   id: 'offDay' | 'offNight',
   input: CompanyInput,
+  baseHourlyRate: number,
   existing?: ShiftConfig
 ): ShiftConfig => {
   const isNight = id === 'offNight';
-  const rate = hourlyOf(input) * (isNight ? NIDEC_NIGHT_OT : NIDEC_DAY_OT) * offMultiplierOf(input);
+  const rate = baseHourlyRate * NIDEC_OFF_MULTIPLIER;
 
   return {
     name: existing?.name ?? (isNight ? 'Nghỉ (đêm)' : 'Nghỉ (ngày)'),
@@ -138,7 +133,6 @@ export const NIDEC_PRESET: CompanyPreset = {
   name: 'Nidec Việt Nam',
   description: 'Lương theo công thức của công ty: ca ngày, ca đêm và ngày nghỉ',
   defaultWorkDays: 22,
-  defaultOffMultiplier: NIDEC_OFF_MULTIPLIER,
   formula: [
     'Ca ngày: lương cơ bản / ngày công = lương 1 ngày',
     'Lương 1 ngày / 9,5 giờ = đơn giá giờ cơ bản',
@@ -146,34 +140,35 @@ export const NIDEC_PRESET: CompanyPreset = {
     'Ca đêm: giờ cơ bản như ca ngày, giờ tăng ca = giờ cơ bản x 2,1',
   ],
   offFormula: [
-    'Nghỉ (ca ngày) = đơn giá giờ tăng ca ca ngày x 2',
-    'Nghỉ (ca đêm) = đơn giá giờ tăng ca ca đêm x 2',
-    'Mọi giờ làm trong ngày nghỉ tính cùng đơn giá này',
+    'Nghỉ (ca ngày) = đơn giá giờ cơ bản ca ngày x 2',
+    'Nghỉ (ca đêm) = đơn giá giờ cơ bản ca đêm x 2',
+    'Mọi giờ làm trong ngày nghỉ tính cùng đơn giá, không áp dụng tăng ca',
   ],
   build: (input, existing) => {
     const include = input.includeOffDays !== false;
+    const dayShift = buildNidecShift('day', input, existing?.day);
+    const nightShift = buildNidecShift('night', input, existing?.night);
     const shifts: Record<string, ShiftConfig> = {
-      day: buildNidecShift('day', input, existing?.day),
-      night: buildNidecShift('night', input, existing?.night),
+      day: dayShift,
+      night: nightShift,
     };
     const shiftOrder = ['day', 'night'];
     if (include) {
-      shifts.offDay = buildNidecOffShift('offDay', input, existing?.offDay);
-      shifts.offNight = buildNidecOffShift('offNight', input, existing?.offNight);
+      shifts.offDay = buildNidecOffShift('offDay', input, dayShift.baseRate, existing?.offDay);
+      shifts.offNight = buildNidecOffShift('offNight', input, nightShift.baseRate, existing?.offNight);
       shiftOrder.push('offDay', 'offNight');
     }
     return { shifts, shiftOrder };
   },
   preview: (input) => {
     const hourly = hourlyOf(input);
-    const m = offMultiplierOf(input);
     return {
       dailyPay: input.workDays > 0 ? input.baseSalary / input.workDays : 0,
       hourly,
       dayOvertime: hourly * NIDEC_DAY_OT,
       nightOvertime: hourly * NIDEC_NIGHT_OT,
-      offDay: hourly * NIDEC_DAY_OT * m,
-      offNight: hourly * NIDEC_NIGHT_OT * m,
+      offDay: hourly * NIDEC_OFF_MULTIPLIER,
+      offNight: hourly * NIDEC_OFF_MULTIPLIER,
     };
   },
 };
@@ -204,10 +199,46 @@ export const applyCompanyPreset = (
       id: preset.id,
       baseSalary: input.baseSalary,
       workDays: input.workDays,
-      offMultiplier: input.offMultiplier,
+      offMultiplier: NIDEC_OFF_MULTIPLIER,
       includeOffDays: input.includeOffDays !== false,
     },
   };
+};
+
+/** Correct legacy Nidec holiday rates while preserving rates customized by the user. */
+export const migrateNidecOffRates = (config: SalaryConfig): SalaryConfig => {
+  if (config.company?.id !== 'nidec') return config;
+
+  const shifts = { ...config.shifts };
+  let changed = false;
+  const multiplier = config.company.offMultiplier && config.company.offMultiplier > 0
+    ? config.company.offMultiplier
+    : NIDEC_OFF_MULTIPLIER;
+  const date = '2026-01-01';
+
+  ([
+    ['day', 'offDay', NIDEC_DAY_OT],
+    ['night', 'offNight', NIDEC_NIGHT_OT],
+  ] as const).forEach(([workId, offId, oldOvertimeMultiplier]) => {
+    const workShift = shifts[workId];
+    const offShift = shifts[offId];
+    if (!workShift || !offShift) return;
+
+    const baseRate = resolveShiftRates(workShift, date).baseRate;
+    const oldGeneratedRate = baseRate * oldOvertimeMultiplier * multiplier;
+    const matchesOldFormula =
+      Math.abs(offShift.baseRate - oldGeneratedRate) < 0.0001 &&
+      Math.abs(offShift.overtimeRate - oldGeneratedRate) < 0.0001;
+    if (!matchesOldFormula || baseRate <= 0) return;
+
+    const newRate = baseRate * NIDEC_OFF_MULTIPLIER;
+    shifts[offId] = { ...offShift, baseRate: newRate, overtimeRate: newRate };
+    changed = true;
+  });
+
+  return changed
+    ? { ...config, shifts, company: { ...config.company, offMultiplier: NIDEC_OFF_MULTIPLIER } }
+    : config;
 };
 
 // Dùng cho test và màn hình xem trước

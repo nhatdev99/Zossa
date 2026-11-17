@@ -1,4 +1,4 @@
-import { applyCompanyPreset, NIDEC_PRESET, previewShiftRates } from '../companyPresets';
+import { applyCompanyPreset, migrateNidecOffRates, NIDEC_PRESET, previewShiftRates } from '../companyPresets';
 import { AttendanceRecord, SalaryConfig, calculateDailySalary } from '../salaryCalculator';
 
 describe('Công thức công ty: Nidec Việt Nam', () => {
@@ -12,8 +12,8 @@ describe('Công thức công ty: Nidec Việt Nam', () => {
     expect(p.hourly).toBe(50_000);
     expect(p.dayOvertime).toBe(75_000);
     expect(p.nightOvertime).toBe(105_000);
-    expect(p.offDay).toBe(150_000);
-    expect(p.offNight).toBe(210_000);
+    expect(p.offDay).toBe(100_000);
+    expect(p.offNight).toBe(100_000);
   });
 
   test('áp dụng: tạo ca ngày và ca đêm với hệ số 1,5 và 2,1', () => {
@@ -27,37 +27,55 @@ describe('Công thức công ty: Nidec Việt Nam', () => {
     expect(night.overtimeRate).toBe(105_000);
     expect(cfg.shifts.night.isNight).toBe(true);
     expect(cfg.company).toEqual({
-      id: 'nidec', baseSalary: 10_450_000, workDays: 22, offMultiplier: undefined, includeOffDays: true,
+      id: 'nidec', baseSalary: 10_450_000, workDays: 22, offMultiplier: 2, includeOffDays: true,
     });
   });
 
-  test('ngày nghỉ: đơn giá = giờ tăng ca x 2 (ca ngày 150.000, ca đêm 210.000), mọi giờ cùng đơn giá', () => {
+  test('ngày nghỉ: mọi giờ đều bằng x2 đơn giá giờ cơ bản, không áp dụng hệ số tăng ca', () => {
     const cfg = applyCompanyPreset(empty, 'nidec', input);
     const offDay = previewShiftRates(cfg.shifts.offDay, '2026-11-10');
     const offNight = previewShiftRates(cfg.shifts.offNight, '2026-11-10');
-    expect(offDay.baseRate).toBe(150_000);
-    expect(offDay.overtimeRate).toBe(150_000);
-    expect(offNight.baseRate).toBe(210_000);
-    expect(offNight.overtimeRate).toBe(210_000);
+    expect(offDay.baseRate).toBe(100_000);
+    expect(offDay.overtimeRate).toBe(100_000);
+    expect(offNight.baseRate).toBe(100_000);
+    expect(offNight.overtimeRate).toBe(100_000);
     expect(cfg.shifts.offDay.isOff).toBe(true);
     expect(cfg.shifts.offNight.isNight).toBe(true);
     const rec = (shiftType: string): AttendanceRecord => ({
-      id: shiftType, date: '2026-11-10', shiftType, actualHours: 9.5, overtimeHours: 2,
+      id: shiftType, date: '2026-11-10', shiftType, actualHours: 8, overtimeHours: 4,
     });
-    // 11,5 giờ x 150.000 và 11,5 giờ x 210.000
-    expect(calculateDailySalary(rec('offDay'), cfg).total).toBe(1_725_000);
-    expect(calculateDailySalary(rec('offNight'), cfg).total).toBe(2_415_000);
+    // 12 giờ x 100.000, không tính tăng ca riêng
+    expect(calculateDailySalary(rec('offDay'), cfg).total).toBe(1_200_000);
+    expect(calculateDailySalary(rec('offNight'), cfg).total).toBe(1_200_000);
   });
 
-  test('ngày nghỉ: đổi hệ số ngày nghỉ (x3) và tắt công thức ngày nghỉ', () => {
-    const x3 = applyCompanyPreset(empty, 'nidec', { ...input, offMultiplier: 3 });
-    expect(previewShiftRates(x3.shifts.offDay, '2026-11-10').baseRate).toBe(225_000);
-
+  test('ngày nghỉ: áp dụng cố định x2 và có thể tắt công thức ngày nghỉ', () => {
+    const cfg = applyCompanyPreset(empty, 'nidec', input);
+    expect(previewShiftRates(cfg.shifts.offDay, '2026-11-10').baseRate).toBe(100_000);
     const off: SalaryConfig = { ...empty, shifts: { offDay: { name: 'Nghỉ cũ', isOff: true, baseHours: 8, baseRate: 1, overtimeHours: 0, overtimeRate: 1 } }, shiftOrder: ['offDay'] };
     const without = applyCompanyPreset(off, 'nidec', { ...input, includeOffDays: false });
     expect(without.shiftOrder).toEqual(['day', 'night', 'offDay']);
     expect(without.shifts.offDay).toBe(off.shifts.offDay);
     expect(without.shifts.offNight).toBe(undefined);
+  });
+
+  test('migration sửa đơn giá ngày nghỉ Nidec cũ nhưng giữ nguyên đơn giá đã chỉnh riêng', () => {
+    const legacy: SalaryConfig = {
+      ...empty,
+      shifts: {
+        day: { baseHours: 9.5, baseRate: 50_000, overtimeHours: 1.5, overtimeRate: 75_000 },
+        night: { baseHours: 9.5, baseRate: 60_000, overtimeHours: 1.5, overtimeRate: 126_000 },
+        offDay: { baseHours: 9.5, baseRate: 160_000, overtimeHours: 1.5, overtimeRate: 160_000, isOff: true },
+        offNight: { baseHours: 9.5, baseRate: 252_000, overtimeHours: 1.5, overtimeRate: 252_000, isOff: true },
+      },
+      shiftOrder: ['day', 'night', 'offDay', 'offNight'],
+      company: { id: 'nidec', baseSalary: 10_450_000, workDays: 22 },
+    };
+
+    const migrated = migrateNidecOffRates(legacy);
+    expect(migrated.shifts.offDay.baseRate).toBe(160_000);
+    expect(migrated.shifts.offNight.baseRate).toBe(120_000);
+    expect(migrated.shifts.offNight.overtimeRate).toBe(120_000);
   });
 
   test('lương một ngày: ca ngày 9,5 giờ + 2 giờ tăng ca = 625.000; ca đêm = 685.000', () => {
@@ -85,7 +103,7 @@ describe('Công thức công ty: Nidec Việt Nam', () => {
     expect(cfg.shiftOrder).toEqual(['day', 'night', 'offDay', 'offNight']);
     // Ca nghỉ giữ tên đã đặt, đơn giá theo công thức mới
     expect(cfg.shifts.offDay.name).toBe('Nghỉ');
-    expect(cfg.shifts.offDay.baseRate).toBe(150_000);
+    expect(cfg.shifts.offDay.baseRate).toBe(100_000);
     expect(cfg.taxRate).toBe(5);
     const n = cfg.shifts.night;
     expect(n.name).toBe('Ca đêm của tôi');

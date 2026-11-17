@@ -358,10 +358,12 @@ export const calculateDailySalary = (
   );
   
   // Dựa trên số giờ làm thực tế và config của loại ca đó
-  const base = record.actualHours * rates.baseRate;
-  const ot =
-    record.overtimeHours *
-    rates.overtimeRate;
+  const base = shiftConfig.isOff
+    ? (record.actualHours + record.overtimeHours) * rates.baseRate
+    : record.actualHours * rates.baseRate;
+  const ot = shiftConfig.isOff
+    ? 0
+    : record.overtimeHours * rates.overtimeRate;
   const extra =
     (shiftConfig.extraHours || 0) *
     rates.extraRate;
@@ -461,7 +463,12 @@ const calcExemptPremium = (
       normal = candidates.length ? Math.min(...candidates) : rates.baseRate;
     }
 
-    if (shift.isNight || shift.isOff) {
+    if (shift.isOff) {
+      exempt += Math.max(0, rates.baseRate - normal) * (record.actualHours + record.overtimeHours);
+      return;
+    }
+
+    if (shift.isNight) {
       exempt += Math.max(0, rates.baseRate - normal) * record.actualHours;
     }
 

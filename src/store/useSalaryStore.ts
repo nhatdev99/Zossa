@@ -14,6 +14,7 @@ import {
   splitScheduledHours,
   buildShiftTimestamps,
 } from '../utils/salaryCalculator';
+import { migrateNidecOffRates } from '../utils/companyPresets';
 
 export interface SalaryState {
   config: SalaryConfig;
@@ -333,13 +334,14 @@ export const useSalaryStore = create<SalaryState>()(
     }),
     {
       name: 'salary-storage',
-      version: 1,
+      version: 2,
       // v0 -> v1: chuyển 4 ca cố định sang danh sách ca tuỳ chỉnh
+      // v1 -> v2: sửa đơn giá ngày nghỉ do công thức Nidec cũ tạo ra
       migrate: (persisted: any) => {
         if (!persisted) return persisted;
         return {
           ...persisted,
-          config: normalizeConfig(persisted.config),
+          config: migrateNidecOffRates(normalizeConfig(persisted.config)),
         };
       },
       storage: createJSONStorage(

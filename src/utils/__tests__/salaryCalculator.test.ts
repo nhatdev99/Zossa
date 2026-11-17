@@ -41,6 +41,21 @@ describe('salaryCalculator', () => {
     expect(result.total).toBe(1100);
   });
 
+  test('calculateDailySalary - ca ngày nghỉ tính mọi giờ theo đơn giá cơ bản, không áp dụng đơn giá tăng ca', () => {
+    const record: AttendanceRecord = {
+      id: 'off',
+      date: '2023-10-01',
+      shiftType: 'offDay',
+      actualHours: 8,
+      overtimeHours: 4,
+    };
+
+    const result = calculateDailySalary(record, mockConfig);
+    expect(result.base).toBe(2400);
+    expect(result.ot).toBe(0);
+    expect(result.total).toBe(2400);
+  });
+
   test('calculateMonthlySalary - Only returns records for specific month', () => {
     const records: AttendanceRecord[] = [
       { id: '1', date: '2023-10-01', shiftType: 'day', actualHours: 8, overtimeHours: 0 },
@@ -195,18 +210,21 @@ describe('salaryCalculator', () => {
       shifts: {
         day: { baseHours: 8, baseRate: 100_000, overtimeHours: 0, overtimeRate: 150_000 },
         night: { baseHours: 8, baseRate: 130_000, overtimeHours: 0, overtimeRate: 200_000, isNight: true },
+        offDay: { baseHours: 8, baseRate: 200_000, overtimeHours: 0, overtimeRate: 300_000, isOff: true },
       },
-      shiftOrder: ['day', 'night'],
+      shiftOrder: ['day', 'night', 'offDay'],
       taxRate: 0,
       tax: { ...progressive, insuranceEnabled: false },
     };
     const records: AttendanceRecord[] = [
       { id: 'n', date: '2026-08-01', shiftType: 'night', actualHours: 8, overtimeHours: 0 },
       { id: 'o', date: '2026-08-02', shiftType: 'day', actualHours: 8, overtimeHours: 50 },
+      { id: 'off', date: '2026-08-03', shiftType: 'offDay', actualHours: 8, overtimeHours: 50 },
     ];
     const r = calculateMonthlySalary(records, cfg, '2026-08');
-    // Đêm: (130k-100k) x 8h = 240k. Tăng ca: (150k-100k) x 40h (trần) = 2.000k
-    expect(r.exemptAmount).toBe(2_240_000);
+    // Đêm: 240k. Tăng ca thường: (150k-100k) x 40h = 2.000k.
+    // Ngày nghỉ: (200k-100k) x 58h; không áp dụng trần giờ tăng ca.
+    expect(r.exemptAmount).toBe(8_040_000);
   });
 
   test('Cấu hình cũ chỉ có taxRate vẫn khấu trừ cố định như trước', () => {

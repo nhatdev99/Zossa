@@ -28,15 +28,11 @@ export default function CompanyPresetScreen() {
   );
 
   const [includeOff, setIncludeOff] = useState(config.company?.includeOffDays ?? true);
-  const [offMultiplier, setOffMultiplier] = useState(
-    String(config.company?.offMultiplier ?? preset.defaultOffMultiplier)
-  );
 
   const input = {
     baseSalary: num(salary),
     workDays: num(workDays),
     includeOffDays: includeOff,
-    offMultiplier: num(offMultiplier) > 0 ? num(offMultiplier) : preset.defaultOffMultiplier,
   };
   const valid = input.baseSalary > 0 && input.workDays > 0;
   const p = preset.preview(input);
@@ -147,12 +143,6 @@ export default function CompanyPresetScreen() {
                 • {line}
               </Text>
             ))}
-
-            <Text style={[styles.label, { marginTop: 14 }]}>Hệ số ngày nghỉ</Text>
-            <View style={styles.inputRow}>
-              <TextInput style={styles.input} keyboardType="numeric" value={offMultiplier} onChangeText={setOffMultiplier} />
-              <Text style={styles.suffix}>x đơn giá tăng ca</Text>
-            </View>
 
             <View style={{ marginTop: 10 }}>
               <Row label="Nghỉ (ca ngày) mỗi giờ" value={valid ? vnd(p.offDay) : '-'} strong />
