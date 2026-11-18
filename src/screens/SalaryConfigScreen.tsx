@@ -17,6 +17,7 @@ import {
   WorkDayMode,
   getShift,
   resolveShiftRates,
+  splitOffNightHours,
   splitScheduledHours,
 } from '../utils/salaryCalculator';
 import ShiftTimeEditor from '../components/ShiftTimeEditor';
@@ -191,10 +192,24 @@ export default function SalaryConfigScreen({ navigation }: any) {
 
   const renderedFields = calcMode === 'manual' ? MANUAL_FIELDS : AUTO_FIELDS;
   const showAllowanceField = true;
+  const isOffShift = formValues.isOff === '1';
+  const isOffNightShift = isOffShift && formValues.isNight === '1';
 
-  const baseAmount = parseLocaleNumber(formValues.baseHours) * previewRates.baseRate;
-  const overtimeAmount = parseLocaleNumber(formValues.overtimeHours) * (calcMode === 'auto' ? previewRates.overtimeRate : parsed.overtimeRate);
-  const extraAmount = parseLocaleNumber(formValues.extraHours) * (calcMode === 'auto' ? previewRates.extraRate : parsed.extraRate);
+  const resolvedOvertimeRate = calcMode === 'auto' ? previewRates.overtimeRate : parsed.overtimeRate;
+  const offNightSplit = isOffNightShift
+    ? splitOffNightHours(
+        { actualHours: parsed.baseHours, overtimeHours: parsed.overtimeHours },
+        { ...currentShift, baseHours: parsed.baseHours, overtimeHours: parsed.overtimeHours }
+      )
+    : null;
+
+  const baseAmount = isOffShift
+    ? isOffNightShift && resolvedOvertimeRate > 0 && resolvedOvertimeRate !== previewRates.baseRate && offNightSplit
+      ? offNightSplit.dayHours * previewRates.baseRate + offNightSplit.nightHours * resolvedOvertimeRate
+      : (parsed.baseHours + parsed.overtimeHours) * previewRates.baseRate
+    : parsed.baseHours * previewRates.baseRate;
+  const overtimeAmount = isOffShift ? 0 : parsed.overtimeHours * resolvedOvertimeRate;
+  const extraAmount = parsed.extraHours * (calcMode === 'auto' ? previewRates.extraRate : parsed.extraRate);
   const allowanceAmount = showAllowanceField ? parsed.allowance : 0;
 
   return (
@@ -364,7 +379,13 @@ export default function SalaryConfigScreen({ navigation }: any) {
         )}
 
         {renderedFields.map((field) => {
-          const { label, suffix } = FIELD_LABELS[field];
+          const { label: defaultLabel, suffix } = FIELD_LABELS[field];
+          const label =
+            isOffNightShift && field === 'baseRate'
+              ? 'Đơn giá 19h–22h & 6h–7h'
+              : isOffNightShift && field === 'overtimeRate'
+              ? 'Đơn giá ban đêm (22h–6h)'
+              : defaultLabel;
           return (
             <View key={field} style={styles.fieldCard}>
               <Text style={styles.fieldLabel}>{label}</Text>

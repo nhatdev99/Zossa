@@ -334,9 +334,9 @@ export const useSalaryStore = create<SalaryState>()(
     }),
     {
       name: 'salary-storage',
-      version: 2,
+      version: 3,
       // v0 -> v1: chuyển 4 ca cố định sang danh sách ca tuỳ chỉnh
-      // v1 -> v2: sửa đơn giá ngày nghỉ do công thức Nidec cũ tạo ra
+      // v1 -> v3: cập nhật đơn giá ngày nghỉ theo công thức Nidec (ngày x2; đêm 19h–22h & 6h–7h x2, 22h–6h x2,7)
       migrate: (persisted: any) => {
         if (!persisted) return persisted;
         return {

@@ -10,6 +10,7 @@ import {
   formatTime,
   getScheduledHours,
   splitScheduledHours,
+  splitOffNightHours,
   buildShiftTimestamps,
 } from '../salaryCalculator';
 
@@ -292,5 +293,50 @@ describe('salaryCalculator', () => {
     expect(r.insuranceAmount).toBe(0);
     expect(r.taxAmount).toBe(0);
     expect(r.netSalary).toBe(0);
+  });
+
+  test('splitOffNightHours - tách giờ ca nghỉ đêm theo khung 19h–22h, 22h–6h, 6h–7h', () => {
+    const offNightShift = {
+      baseHours: 12,
+      overtimeHours: 0,
+      baseRate: 100_000,
+      overtimeRate: 135_000,
+      isOff: true,
+      isNight: true,
+      startTime: '19:00',
+      endTime: '07:00',
+    };
+
+    // Đủ ca 12h từ 19:00 -> 07:00: 3h (19h–22h) + 1h (6h–7h) = 4h khung x2, 8h (22h–6h) khung x2,7
+    expect(splitOffNightHours({ actualHours: 12, overtimeHours: 0 }, offNightShift)).toEqual({
+      dayHours: 4,
+      nightHours: 8,
+    });
+
+    // Làm từ 19:00 -> 22:00 (3h): toàn bộ nằm trong khung x2
+    expect(
+      splitOffNightHours(
+        {
+          actualHours: 3,
+          overtimeHours: 0,
+          checkInTime: new Date(2026, 10, 10, 19, 0, 0).toISOString(),
+          checkOutTime: new Date(2026, 10, 10, 22, 0, 0).toISOString(),
+        },
+        offNightShift
+      )
+    ).toEqual({ dayHours: 3, nightHours: 0 });
+
+    // Làm từ 20:00 -> 06:30 (10,5h): 2h (20h–22h) + 0,5h (6h–6h30) = 2,5h x2, và 8h (22h–6h) x2,7
+    expect(
+      splitOffNightHours(
+        {
+          actualHours: 10.5,
+          overtimeHours: 0,
+          checkInTime: new Date(2026, 10, 10, 20, 0, 0).toISOString(),
+          checkOutTime: new Date(2026, 10, 11, 6, 30, 0).toISOString(),
+        },
+        offNightShift
+      )
+    ).toEqual({ dayHours: 2.5, nightHours: 8 });
   });
 });

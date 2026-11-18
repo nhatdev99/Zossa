@@ -300,8 +300,9 @@ export default function SetupScreen() {
                 <SummaryRow label="Giờ cơ bản" value={`${formatMoney(hourlyRate)} ₫`} />
                 <SummaryRow label="Giờ tăng ca ngày (x1,5)" value={`${formatMoney(hourlyRate * 1.5)} ₫`} />
                 <SummaryRow label="Giờ tăng ca đêm (x2,1)" value={`${formatMoney(hourlyRate * 2.1)} ₫`} />
-                <SummaryRow label="Ngày nghỉ, ca ngày (x2 tăng ca)" value={`${formatMoney(hourlyRate * 1.5 * 2)} ₫`} />
-                <SummaryRow label="Ngày nghỉ, ca đêm (x2 tăng ca)" value={`${formatMoney(hourlyRate * 2.1 * 2)} ₫`} />
+                <SummaryRow label="Nghỉ (ngày) mỗi giờ (x2)" value={`${formatMoney(hourlyRate * 2)} ₫`} />
+                <SummaryRow label="Nghỉ (đêm) 19h–22h, 6h–7h (x2)" value={`${formatMoney(hourlyRate * 2)} ₫`} />
+                <SummaryRow label="Nghỉ (đêm) 22h–6h (x2,7)" value={`${formatMoney(hourlyRate * 2.7)} ₫`} />
               </View>
             </>
             ) : (

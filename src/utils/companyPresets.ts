@@ -11,8 +11,9 @@ export interface CompanyPreview {
   hourly: number;
   dayOvertime: number;
   nightOvertime: number;
-  offDay: number; // Đơn giá giờ ngày nghỉ (ca ngày)
-  offNight: number; // Đơn giá giờ ngày nghỉ (ca đêm)
+  offDay: number; // Đơn giá giờ ngày nghỉ (ca ngày): LCB mỗi giờ x 2
+  offNightDaytime: number; // Đơn giá giờ ngày nghỉ (ca đêm) 19h–22h & 6h–7h: LCB mỗi giờ x 2
+  offNight: number; // Đơn giá giờ ngày nghỉ (ca đêm) 22h–6h: LCB mỗi giờ x 2,7
 }
 
 export interface CompanyPreset {
@@ -38,13 +39,17 @@ export interface CompanyPreset {
 //            / 9,5 giờ = đơn giá giờ cơ bản; x 1,5 = đơn giá giờ tăng ca
 //   Ca đêm : đơn giá giờ cơ bản như ca ngày; x 2,1 = đơn giá giờ tăng ca
 //  Công thức ngày nghỉ (tách riêng)
-//   Nghỉ (ca ngày/đêm) = đơn giá giờ cơ bản tương ứng x 2
-//   Mọi giờ làm trong ngày nghỉ tính cùng đơn giá, không áp dụng hệ số tăng ca.
+//   Nghỉ (ngày): lương cơ bản mỗi giờ x 2
+//   Nghỉ (đêm) : 19h–22h lương cơ bản mỗi giờ x 2,
+//                22h–6h (hôm sau) lương cơ bản mỗi giờ x 2,7,
+//                6h–7h lương cơ bản mỗi giờ x 2
 // ---------------------------------------------------------------------------
 const NIDEC_BASE_HOURS = 9.5;
+const NIDEC_OFF_NIGHT_HOURS = 12;
 const NIDEC_DAY_OT = 1.5;
 const NIDEC_NIGHT_OT = 2.1;
 const NIDEC_OFF_MULTIPLIER = 2;
+const NIDEC_OFF_NIGHT_MULTIPLIER = 2.7;
 
 const round4 = (v: number) => Math.round(v * 10000) / 10000;
 
@@ -91,8 +96,10 @@ const buildNidecShift = (
 };
 
 /**
- * Ca ngày nghỉ: mọi giờ làm tính theo (đơn giá giờ cơ bản của ca tương ứng x 2).
- * Lưu ở chế độ thủ công với đơn giá đã tính sẵn; áp dụng lại công thức để cập nhật khi đổi lương.
+ * Ca ngày nghỉ:
+ * - Nghỉ (ngày): mọi giờ làm tính theo (lương cơ bản mỗi giờ x 2).
+ * - Nghỉ (đêm) : 19h–22h và 6h–7h tính theo (lương cơ bản mỗi giờ x 2),
+ *                22h–6h (hôm sau) tính theo (lương cơ bản mỗi giờ x 2,7).
  */
 const buildNidecOffShift = (
   id: 'offDay' | 'offNight',
@@ -101,7 +108,8 @@ const buildNidecOffShift = (
   existing?: ShiftConfig
 ): ShiftConfig => {
   const isNight = id === 'offNight';
-  const rate = baseHourlyRate * NIDEC_OFF_MULTIPLIER;
+  const dayOffRate = baseHourlyRate * NIDEC_OFF_MULTIPLIER;
+  const nightOffRate = baseHourlyRate * (isNight ? NIDEC_OFF_NIGHT_MULTIPLIER : NIDEC_OFF_MULTIPLIER);
 
   return {
     name: existing?.name ?? (isNight ? 'Nghỉ (đêm)' : 'Nghỉ (ngày)'),
@@ -109,20 +117,20 @@ const buildNidecOffShift = (
     icon: existing?.icon ?? (isNight ? 'moon-outline' : 'sunny-outline'),
     isOff: true,
     isNight,
-    startTime: existing?.startTime,
-    endTime: existing?.endTime,
-    breakMinutes: existing?.breakMinutes,
+    startTime: existing?.startTime ?? (isNight ? '19:00' : undefined),
+    endTime: existing?.endTime ?? (isNight ? '07:00' : undefined),
+    breakMinutes: existing?.breakMinutes ?? (isNight ? 0 : undefined),
     calcMode: 'manual',
-    baseHours: NIDEC_BASE_HOURS,
-    overtimeHours: existing?.overtimeHours ?? 1.5,
-    baseRate: rate,
-    overtimeRate: rate,
+    baseHours: isNight ? NIDEC_OFF_NIGHT_HOURS : NIDEC_BASE_HOURS,
+    overtimeHours: isNight ? 0 : existing?.overtimeHours ?? 1.5,
+    baseRate: dayOffRate,
+    overtimeRate: nightOffRate,
     extraHours: existing?.extraHours ?? 0,
     extraRate: existing?.extraRate ?? 0,
     baseSalary: input.baseSalary,
     workDayMode: 'custom',
     customWorkDays: input.workDays,
-    overtimeMultiplier: isNight ? NIDEC_NIGHT_OT : NIDEC_DAY_OT,
+    overtimeMultiplier: isNight ? NIDEC_OFF_NIGHT_MULTIPLIER : NIDEC_OFF_MULTIPLIER,
     extraMultiplier: existing?.extraMultiplier ?? 1,
     allowance: existing?.allowance ?? 0,
   };
@@ -140,9 +148,8 @@ export const NIDEC_PRESET: CompanyPreset = {
     'Ca đêm: giờ cơ bản như ca ngày, giờ tăng ca = giờ cơ bản x 2,1',
   ],
   offFormula: [
-    'Nghỉ (ca ngày) = đơn giá giờ cơ bản ca ngày x 2',
-    'Nghỉ (ca đêm) = đơn giá giờ cơ bản ca đêm x 2',
-    'Mọi giờ làm trong ngày nghỉ tính cùng đơn giá, không áp dụng tăng ca',
+    'Nghỉ (ngày): lương cơ bản mỗi giờ x 2',
+    'Nghỉ (đêm): từ 19h–22h lương cơ bản mỗi giờ x 2, từ 22h–6h (hôm sau) x 2,7, từ 6h–7h x 2',
   ],
   build: (input, existing) => {
     const include = input.includeOffDays !== false;
@@ -168,7 +175,8 @@ export const NIDEC_PRESET: CompanyPreset = {
       dayOvertime: hourly * NIDEC_DAY_OT,
       nightOvertime: hourly * NIDEC_NIGHT_OT,
       offDay: hourly * NIDEC_OFF_MULTIPLIER,
-      offNight: hourly * NIDEC_OFF_MULTIPLIER,
+      offNightDaytime: hourly * NIDEC_OFF_MULTIPLIER,
+      offNight: hourly * NIDEC_OFF_NIGHT_MULTIPLIER,
     };
   },
 };
@@ -216,25 +224,49 @@ export const migrateNidecOffRates = (config: SalaryConfig): SalaryConfig => {
     : NIDEC_OFF_MULTIPLIER;
   const date = '2026-01-01';
 
-  ([
-    ['day', 'offDay', NIDEC_DAY_OT],
-    ['night', 'offNight', NIDEC_NIGHT_OT],
-  ] as const).forEach(([workId, offId, oldOvertimeMultiplier]) => {
-    const workShift = shifts[workId];
-    const offShift = shifts[offId];
-    if (!workShift || !offShift) return;
-
-    const baseRate = resolveShiftRates(workShift, date).baseRate;
-    const oldGeneratedRate = baseRate * oldOvertimeMultiplier * multiplier;
+  // Nghỉ (ngày): sửa đơn giá cũ (x1,5 x 2) về x2 nếu người dùng chưa chỉnh riêng
+  if (shifts.day && shifts.offDay) {
+    const baseRate = resolveShiftRates(shifts.day, date).baseRate;
+    const oldGeneratedRate = baseRate * NIDEC_DAY_OT * multiplier;
     const matchesOldFormula =
-      Math.abs(offShift.baseRate - oldGeneratedRate) < 0.0001 &&
-      Math.abs(offShift.overtimeRate - oldGeneratedRate) < 0.0001;
-    if (!matchesOldFormula || baseRate <= 0) return;
+      Math.abs(shifts.offDay.baseRate - oldGeneratedRate) < 0.0001 &&
+      Math.abs(shifts.offDay.overtimeRate - oldGeneratedRate) < 0.0001;
+    if (matchesOldFormula && baseRate > 0) {
+      const newRate = baseRate * NIDEC_OFF_MULTIPLIER;
+      shifts.offDay = { ...shifts.offDay, baseRate: newRate, overtimeRate: newRate };
+      changed = true;
+    }
+  }
 
-    const newRate = baseRate * NIDEC_OFF_MULTIPLIER;
-    shifts[offId] = { ...offShift, baseRate: newRate, overtimeRate: newRate };
-    changed = true;
-  });
+  // Nghỉ (đêm): sửa đơn giá cũ (x2,1 x 2 hoặc cả ca x2) sang 19h–22h & 6h–7h x2, 22h–6h x2,7
+  if (shifts.night && shifts.offNight) {
+    const baseRate = resolveShiftRates(shifts.night, date).baseRate;
+    const oldV1Rate = baseRate * NIDEC_NIGHT_OT * multiplier;
+    const oldV2Rate = baseRate * NIDEC_OFF_MULTIPLIER;
+    const matchesV1 =
+      Math.abs(shifts.offNight.baseRate - oldV1Rate) < 0.0001 &&
+      Math.abs(shifts.offNight.overtimeRate - oldV1Rate) < 0.0001;
+    const matchesV2 =
+      Math.abs(shifts.offNight.baseRate - oldV2Rate) < 0.0001 &&
+      Math.abs(shifts.offNight.overtimeRate - oldV2Rate) < 0.0001;
+    if ((matchesV1 || matchesV2) && baseRate > 0) {
+      const wasDefaultHours =
+        shifts.offNight.baseHours === NIDEC_BASE_HOURS && shifts.offNight.overtimeHours === 1.5;
+      shifts.offNight = {
+        ...shifts.offNight,
+        isNight: true,
+        startTime: shifts.offNight.startTime ?? '19:00',
+        endTime: shifts.offNight.endTime ?? '07:00',
+        breakMinutes: shifts.offNight.breakMinutes ?? 0,
+        baseHours: wasDefaultHours ? NIDEC_OFF_NIGHT_HOURS : shifts.offNight.baseHours,
+        overtimeHours: wasDefaultHours ? 0 : shifts.offNight.overtimeHours,
+        baseRate: baseRate * NIDEC_OFF_MULTIPLIER,
+        overtimeRate: baseRate * NIDEC_OFF_NIGHT_MULTIPLIER,
+        overtimeMultiplier: NIDEC_OFF_NIGHT_MULTIPLIER,
+      };
+      changed = true;
+    }
+  }
 
   return changed
     ? { ...config, shifts, company: { ...config.company, offMultiplier: NIDEC_OFF_MULTIPLIER } }

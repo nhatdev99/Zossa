@@ -345,6 +345,47 @@ export interface MonthlySalary {
 }
 
 /**
+ * Tách tổng số giờ làm của ca nghỉ đêm thành:
+ * - dayHours: khung ngoài 22h–6h (ví dụ 19h–22h và 6h–7h)
+ * - nightHours: khung ban đêm 22h–6h sáng hôm sau
+ */
+export const splitOffNightHours = (
+  record: Pick<AttendanceRecord, 'actualHours' | 'overtimeHours' | 'checkInTime' | 'checkOutTime'>,
+  shiftConfig: ShiftConfig
+): { dayHours: number; nightHours: number } => {
+  const totalHours = Math.max(0, (record.actualHours || 0) + (record.overtimeHours || 0));
+  if (totalHours <= 0) return { dayHours: 0, nightHours: 0 };
+
+  let startMin: number | null = null;
+  if (record.checkInTime) {
+    const checkIn = new Date(record.checkInTime);
+    if (!Number.isNaN(checkIn.getTime())) {
+      startMin = checkIn.getHours() * 60 + checkIn.getMinutes() + checkIn.getSeconds() / 60;
+    }
+  }
+  if (startMin === null) {
+    startMin = parseTime(shiftConfig.startTime) ?? 19 * 60;
+  }
+
+  const durationMin = totalHours * 60;
+  const endMin = startMin + durationMin;
+
+  // Tính tổng số phút giao với các khung đêm [22:00, 06:00 hôm sau) lặp lại mỗi 24h (1440 phút)
+  const maxDay = Math.ceil(endMin / 1440) + 1;
+  let nightMin = 0;
+  for (let d = 0; d <= maxDay; d++) {
+    const winStart = d * 1440 - 120; // 22:00 ngày trước (khi d=0 là -120..360 tức 00:00..06:00)
+    const winEnd = d * 1440 + 360; // 06:00 ngày d
+    const overlap = Math.max(0, Math.min(endMin, winEnd) - Math.max(startMin, winStart));
+    nightMin += overlap;
+  }
+
+  const nightHours = Math.min(totalHours, Math.round((nightMin / 60) * 10000) / 10000);
+  const dayHours = Math.max(0, Math.round((totalHours - nightHours) * 10000) / 10000);
+  return { dayHours, nightHours };
+};
+
+/**
  * Tính toán lương cho 1 ca làm việc cụ thể
  */
 export const calculateDailySalary = (
@@ -358,12 +399,19 @@ export const calculateDailySalary = (
   );
   
   // Dựa trên số giờ làm thực tế và config của loại ca đó
-  const base = shiftConfig.isOff
-    ? (record.actualHours + record.overtimeHours) * rates.baseRate
-    : record.actualHours * rates.baseRate;
-  const ot = shiftConfig.isOff
-    ? 0
-    : record.overtimeHours * rates.overtimeRate;
+  let base = 0;
+  let ot = 0;
+  if (shiftConfig.isOff) {
+    if (shiftConfig.isNight && rates.overtimeRate > 0 && rates.overtimeRate !== rates.baseRate) {
+      const { dayHours, nightHours } = splitOffNightHours(record, shiftConfig);
+      base = dayHours * rates.baseRate + nightHours * rates.overtimeRate;
+    } else {
+      base = (record.actualHours + record.overtimeHours) * rates.baseRate;
+    }
+  } else {
+    base = record.actualHours * rates.baseRate;
+    ot = record.overtimeHours * rates.overtimeRate;
+  }
   const extra =
     (shiftConfig.extraHours || 0) *
     rates.extraRate;
@@ -464,7 +512,14 @@ const calcExemptPremium = (
     }
 
     if (shift.isOff) {
-      exempt += Math.max(0, rates.baseRate - normal) * (record.actualHours + record.overtimeHours);
+      if (shift.isNight && rates.overtimeRate > 0 && rates.overtimeRate !== rates.baseRate) {
+        const { dayHours, nightHours } = splitOffNightHours(record, shift);
+        exempt +=
+          Math.max(0, rates.baseRate - normal) * dayHours +
+          Math.max(0, rates.overtimeRate - normal) * nightHours;
+      } else {
+        exempt += Math.max(0, rates.baseRate - normal) * (record.actualHours + record.overtimeHours);
+      }
       return;
     }
 

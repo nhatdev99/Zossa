@@ -145,8 +145,9 @@ export default function CompanyPresetScreen() {
             ))}
 
             <View style={{ marginTop: 10 }}>
-              <Row label="Nghỉ (ca ngày) mỗi giờ" value={valid ? vnd(p.offDay) : '-'} strong />
-              <Row label="Nghỉ (ca đêm) mỗi giờ" value={valid ? vnd(p.offNight) : '-'} strong />
+              <Row label="Nghỉ (ngày) mỗi giờ (x2)" value={valid ? vnd(p.offDay) : '-'} strong />
+              <Row label="Nghỉ (đêm) 19h–22h, 6h–7h (x2)" value={valid ? vnd(p.offNightDaytime) : '-'} strong />
+              <Row label="Nghỉ (đêm) 22h–6h (x2,7)" value={valid ? vnd(p.offNight) : '-'} strong />
             </View>
           </>
         )}
